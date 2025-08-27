@@ -50,17 +50,20 @@ const SearchInput = memo(({
   onClear: () => void; 
 }) => (
   <View style={styles.searchContainer}>
+    <Text style={styles.searchIcon}>🔍</Text>
     <TextInput
       style={styles.searchInput}
       placeholder="Search launches..."
+      placeholderTextColor={Colors.textPlaceholder}
       value={searchQuery}
       onChangeText={onSearch}
       autoCorrect={false}
       autoCapitalize="none"
+      returnKeyType="search"
     />
     {searchQuery.trim() && (
       <TouchableOpacity style={styles.clearButton} onPress={onClear}>
-        <Text style={styles.clearButtonText}>Clear</Text>
+        <Text style={styles.clearButtonText}>✕</Text>
       </TouchableOpacity>
     )}
   </View>
@@ -352,35 +355,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.surface,
     margin: 16,
-    borderRadius: 10,
-    paddingHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 4,
     shadowColor: Colors.shadow,
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  searchIcon: {
+    fontSize: 18,
+    color: Colors.textTertiary,
+    marginRight: 12,
+    opacity: 0.8,
   },
   searchInput: {
     flex: 1,
-    height: 44,
+    height: 48,
     fontSize: 16,
     color: Colors.textPrimary,
-  },
-  clearButton: {
-    paddingLeft: 12,
-  },
-  clearButtonText: {
-    color: Colors.primary,
-    fontSize: 16,
     fontWeight: '500',
   },
+  clearButton: {
+    paddingLeft: 16,
+    paddingVertical: 8,
+    paddingRight: 4,
+    borderRadius: 12,
+    backgroundColor: Colors.gray100,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearButtonText: {
+    color: Colors.textSecondary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
   },
   footerLoader: {
-    paddingVertical: 20,
+    paddingVertical: 24,
   },
 });

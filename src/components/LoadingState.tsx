@@ -32,12 +32,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   message: {
-    marginTop: 12,
+    marginTop: 16,
     fontSize: 16,
     color: Colors.textSecondary,
     textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 22,
   },
 });
