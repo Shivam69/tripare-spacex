@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useMemo,
   useRef,
+  memo,
 } from 'react';
 import {
   View,
@@ -38,7 +39,34 @@ interface Props {
 
 const ITEMS_PER_PAGE = 20;
 
-export default function LaunchesListScreen({ navigation }: Props) {
+// Extracted search input component to reduce duplication
+const SearchInput = memo(({ 
+  searchQuery, 
+  onSearch, 
+  onClear 
+}: { 
+  searchQuery: string; 
+  onSearch: (query: string) => void; 
+  onClear: () => void; 
+}) => (
+  <View style={styles.searchContainer}>
+    <TextInput
+      style={styles.searchInput}
+      placeholder="Search launches..."
+      value={searchQuery}
+      onChangeText={onSearch}
+      autoCorrect={false}
+      autoCapitalize="none"
+    />
+    {searchQuery.trim() && (
+      <TouchableOpacity style={styles.clearButton} onPress={onClear}>
+        <Text style={styles.clearButtonText}>Clear</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+));
+
+function LaunchesListScreen({ navigation }: Props) {
   const [launches, setLaunches] = useState<Launch[]>([]);
   const [filteredLaunches, setFilteredLaunches] = useState<Launch[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +78,7 @@ export default function LaunchesListScreen({ navigation }: Props) {
   
   const currentOffset = useRef(0);
   const isSearching = useRef(false);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadLaunches = useCallback(
     async (offset = 0, isRefresh = false) => {
@@ -121,27 +150,37 @@ export default function LaunchesListScreen({ navigation }: Props) {
     }
   }, []);
 
-  const handleSearch = useCallback(
-    (query: string) => {
-      setSearchQuery(query);
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
-      if (!query.trim()) {
-        setFilteredLaunches([]);
-        if (launches.length === 0) {
-          loadLaunches(0);
-        }
-        return;
+  // Debounced search effect
+  useEffect(() => {
+    // Clear previous timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    if (!searchQuery.trim()) {
+      setFilteredLaunches([]);
+      if (launches.length === 0) {
+        loadLaunches(0);
       }
+      return;
+    }
 
-      // Debounce search
-      const timeoutId = setTimeout(() => {
-        searchLaunches(query);
-      }, 500);
+    // Set new timeout for debounced search
+    debounceTimeoutRef.current = setTimeout(() => {
+      searchLaunches(searchQuery);
+    }, 500);
 
-      return () => clearTimeout(timeoutId);
-    },
-    [launches.length, loadLaunches, searchLaunches]
-  );
+    // Cleanup function
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, launches.length, loadLaunches, searchLaunches]);
 
   const handleRefresh = useCallback(() => {
     if (searchQuery.trim()) {
@@ -199,6 +238,12 @@ export default function LaunchesListScreen({ navigation }: Props) {
     );
   }, [loadingMore]);
 
+  // Memoize refresh control to prevent unnecessary recreations
+  const refreshControl = useMemo(
+    () => <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />,
+    [refreshing, handleRefresh]
+  );
+
   useFocusEffect(
     useCallback(() => {
       if (launches.length === 0 && !searchQuery.trim()) {
@@ -206,6 +251,15 @@ export default function LaunchesListScreen({ navigation }: Props) {
       }
     }, [launches.length, searchQuery, loadLaunches])
   );
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (loading && displayedLaunches.length === 0) {
     return <LoadingState message="Loading SpaceX launches..." />;
@@ -230,19 +284,11 @@ export default function LaunchesListScreen({ navigation }: Props) {
     if (searchQuery.trim()) {
       return (
         <View style={styles.container}>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search launches..."
-              value={searchQuery}
-              onChangeText={handleSearch}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity style={styles.clearButton} onPress={clearSearch}>
-              <Text style={styles.clearButtonText}>Clear</Text>
-            </TouchableOpacity>
-          </View>
+          <SearchInput 
+            searchQuery={searchQuery}
+            onSearch={handleSearch}
+            onClear={clearSearch}
+          />
           <EmptyState
             title="No launches found"
             message={`No launches found for "${searchQuery}". Try a different search term.`}
@@ -265,43 +311,36 @@ export default function LaunchesListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search launches..."
-          value={searchQuery}
-          onChangeText={handleSearch}
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-        {searchQuery.trim() && (
-          <TouchableOpacity style={styles.clearButton} onPress={clearSearch}>
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchInput 
+        searchQuery={searchQuery}
+        onSearch={handleSearch}
+        onClear={clearSearch}
+      />
 
       <FlatList
         data={displayedLaunches}
         keyExtractor={keyExtractor}
         renderItem={renderLaunchCard}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        refreshControl={refreshControl}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.1}
         ListFooterComponent={renderFooter}
         removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
+        maxToRenderPerBatch={8}
         updateCellsBatchingPeriod={50}
-        initialNumToRender={10}
-        windowSize={10}
+        initialNumToRender={8}
+        windowSize={8}
+        getItemLayout={undefined} // Disable for dynamic heights
+        legacyImplementation={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
       />
     </View>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export default memo(LaunchesListScreen);
 
 const styles = StyleSheet.create({
   container: {

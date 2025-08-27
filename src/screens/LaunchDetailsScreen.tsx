@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   ScrollView,
   View,
@@ -30,7 +30,7 @@ import { Colors } from '../constants/colors';
 
 type Props = StackScreenProps<RootStackParamList, 'LaunchDetails'>;
 
-export default function LaunchDetailsScreen({ route }: Props) {
+function LaunchDetailsScreen({ route }: Props) {
   const { launch } = route.params;
   const [launchpad, setLaunchpad] = useState<Launchpad | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -41,11 +41,12 @@ export default function LaunchDetailsScreen({ route }: Props) {
     LocationPermissionStatus
   >(LocationPermissionStatus.NOT_DETERMINED);
 
-  const status = getLaunchStatus(launch);
-  const isIOS = Platform.OS === 'ios';
-  const missionImage = getMissionImage(launch);
-  const missionDescription = getMissionDescription(launch);
-  const formattedDate = formatLaunchDate(launch.date_utc);
+  // Memoize expensive calculations to prevent unnecessary recalculations
+  const status = useMemo(() => getLaunchStatus(launch), [launch]);
+  const isIOS = useMemo(() => Platform.OS === 'ios', []);
+  const missionImage = useMemo(() => getMissionImage(launch), [launch]);
+  const missionDescription = useMemo(() => getMissionDescription(launch), [launch]);
+  const formattedDate = useMemo(() => formatLaunchDate(launch.date_utc), [launch.date_utc]);
 
   const loadLaunchpad = useCallback(async () => {
     try {
@@ -132,8 +133,9 @@ export default function LaunchDetailsScreen({ route }: Props) {
     checkLocationPermission();
   }, [requestLocation]);
 
-  const distance =
-    launchpad && userLocation
+  // Memoize distance calculation to prevent recalculation on every render
+  const distance = useMemo(() => {
+    return launchpad && userLocation
       ? calculateDistance(
           userLocation.latitude,
           userLocation.longitude,
@@ -141,6 +143,24 @@ export default function LaunchDetailsScreen({ route }: Props) {
           launchpad.longitude
         )
       : null;
+  }, [launchpad, userLocation]);
+
+  // Memoize success rate calculation
+  const successRate = useMemo(() => {
+    if (!launchpad || launchpad.launch_attempts === 0) return 0;
+    return Math.round((launchpad.launch_successes / launchpad.launch_attempts) * 100);
+  }, [launchpad]);
+
+  // Memoize map initial region to prevent recalculation
+  const mapInitialRegion = useMemo(() => {
+    if (!launchpad) return undefined;
+    return {
+      latitude: launchpad.latitude,
+      longitude: launchpad.longitude,
+      latitudeDelta: userLocation ? 2 : 0.5,
+      longitudeDelta: userLocation ? 2 : 0.5,
+    };
+  }, [launchpad, userLocation]);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -166,7 +186,7 @@ export default function LaunchDetailsScreen({ route }: Props) {
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Launch Date:</Text>
-          <Text style={[styles.detailValue,{width:isIOS ? "80%" : "100%",marginLeft:isIOS ? "15%" : 10,top:isIOS ? 5 : 0}]}>{formattedDate}</Text>
+          <Text style={[styles.detailValue, isIOS ? styles.detailValueIOS : styles.detailValueAndroid]}>{formattedDate}</Text>
         </View>
         <View style={styles.descriptionContainer}>
           <Text style={styles.description}>{missionDescription}</Text>
@@ -210,11 +230,7 @@ export default function LaunchDetailsScreen({ route }: Props) {
                   <Text style={styles.statLabel}>Successful</Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Text style={styles.statValue}>
-                    {launchpad.launch_attempts > 0
-                      ? Math.round((launchpad.launch_successes / launchpad.launch_attempts) * 100)
-                      : 0}%
-                  </Text>
+                  <Text style={styles.statValue}>{successRate}%</Text>
                   <Text style={styles.statLabel}>Success Rate</Text>
                 </View>
               </View>
@@ -233,12 +249,7 @@ export default function LaunchDetailsScreen({ route }: Props) {
               <MapView
                 style={styles.map}
                 provider={PROVIDER_GOOGLE}
-                initialRegion={{
-                  latitude: launchpad.latitude,
-                  longitude: launchpad.longitude,
-                  latitudeDelta: userLocation ? 2 : 0.5,
-                  longitudeDelta: userLocation ? 2 : 0.5,
-                }}
+                initialRegion={mapInitialRegion}
                 showsUserLocation={!!userLocation}
                 showsMyLocationButton={false}
               >
@@ -277,6 +288,9 @@ export default function LaunchDetailsScreen({ route }: Props) {
     </ScrollView>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export default memo(LaunchDetailsScreen);
 
 const styles = StyleSheet.create({
   container: {
@@ -341,6 +355,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: Colors.textPrimary,
+  },
+  detailValueIOS: {
+    width: '80%',
+    marginLeft: '15%',
+    top: 5,
+  },
+  detailValueAndroid: {
+    marginLeft: 10,
   },
   descriptionContainer: {
     marginTop: 16,
